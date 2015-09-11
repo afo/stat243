@@ -1,0 +1,1128 @@
+#LyX 2.1 created this file. For more info see http://www.lyx.org/
+\lyxformat 474
+\begin_document
+\begin_header
+\textclass article
+\begin_preamble
+
+\end_preamble
+\use_default_options false
+\begin_modules
+knitr
+\end_modules
+\maintain_unincluded_children false
+\language english
+\language_package none
+\inputencoding auto
+\fontencoding default
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_math auto
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref true
+\pdf_bookmarks true
+\pdf_bookmarksnumbered false
+\pdf_bookmarksopen false
+\pdf_bookmarksopenlevel 1
+\pdf_breaklinks false
+\pdf_pdfborder false
+\pdf_colorlinks false
+\pdf_backref section
+\pdf_pdfusetitle true
+\papersize default
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 0
+\use_package mathtools 1
+\use_package mhchem 0
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine natbib
+\cite_engine_type authoryear
+\biblio_style plainnat
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1in
+\topmargin 1in
+\rightmargin 1in
+\bottommargin 1in
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+PS1 - STAT 243
+\begin_inset Newline newline
+\end_inset
+
+Problem 1 and 2
+\end_layout
+
+\begin_layout Author
+Alexander Fred-Ojala
+\begin_inset Newline newline
+\end_inset
+
+Student ID: 26958060
+\end_layout
+
+\begin_layout Date
+September 11th 2015
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+<<setup, include=FALSE>>=
+\end_layout
+
+\begin_layout Plain Layout
+
+# include any code here you don't want to show up in the document,
+\end_layout
+
+\begin_layout Plain Layout
+
+# e.g., package and dataset loading
+\end_layout
+
+\begin_layout Plain Layout
+
+require(ggplot2)
+\end_layout
+
+\begin_layout Plain Layout
+
+set.seed(0)
+\end_layout
+
+\begin_layout Plain Layout
+
+# also a good place to set global chunk options
+\end_layout
+
+\begin_layout Plain Layout
+
+library(knitr) # need this for opts_chunk command
+\end_layout
+
+\begin_layout Plain Layout
+
+opts_chunk$set(fig.width = 5, fig.height = 5)
+\end_layout
+
+\begin_layout Plain Layout
+
+# if we wanted chunks by default not to be evaluated
+\end_layout
+
+\begin_layout Plain Layout
+
+# opts_chunk$set(eval = FALSE) 
+\end_layout
+
+\begin_layout Plain Layout
+
+@
+\end_layout
+
+\end_inset
+
+ 
+\end_layout
+
+\begin_layout Section
+Problem 1
+\end_layout
+
+\begin_layout Subsection
+1.
+ a)
+\end_layout
+
+\begin_layout Standard
+First we download the zip file with wget (and the option flag -O to name
+ it apricots.zip).
+ Then we unzip it using unzip (with -p option so that nothing but file data
+ is sent to stdout):
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+<<bash1,eval=FALSE, engine='bash'>>=
+\end_layout
+
+\begin_layout Plain Layout
+
+wget -O apricots.zip
+\end_layout
+
+\begin_layout Plain Layout
+
+"http://data.un.org/Handlers/DownloadHandler.ashx?DataFilter=itemCode:526&
+\end_layout
+
+\begin_layout Plain Layout
+
+DataMartId=FAO&Format=csv&c=2,3,4,5,6,7&s=countryName:asc,elementCode:asc,year:d
+esc"
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+unzip -p apricots.zip > apricots.csv
+\end_layout
+
+\begin_layout Plain Layout
+
+@
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+newline
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+To make the sorting easier we remove all the quotation characters and also
+ the four zeros after every figure in the data file.
+ This is done with sed, and then we extract the world data (indicated by
+ a '+').
+ The country data as the exception (using flag -v with grep), also we do
+ not want to include the first line and the footer, so we eliminate those
+ with with the tail and head commands.
+ According to below:
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+<<bash2,eval=FALSE, engine='bash'>>=
+\end_layout
+
+\begin_layout Plain Layout
+
+sed 's/"//g' apricots.csv | sed 's/.0000//g' | grep "+" > region.csv
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+sed 's/"//g' apricots.csv | sed 's/.0000//g' | grep -v "+" | tail -n +2
+\end_layout
+
+\begin_layout Plain Layout
+
+| head -n -7 > country.csv
+\end_layout
+
+\begin_layout Plain Layout
+
+@
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+newline
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Then we subset the countries.csv data file to the year 2005 and we grep for
+ 'Area Harvested'.
+ To obtain the result we sort for numerical values in column 6 (delimiter/sepera
+tor ',') and then we use tail to see the top 5 countries:
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+<<bash3,eval=FALSE, engine='bash'>>=
+\end_layout
+
+\begin_layout Plain Layout
+
+grep "2005" country.csv | grep "Area Harvested" | sort -n -t, -k6,6 | tail
+ -n5
+\end_layout
+
+\begin_layout Plain Layout
+
+@
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+newline
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The procedure can be automated with the following lines put into two scripts
+ (ps1a1.sh, ps1a2 both made executable with 
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+textit{chmod uog+x}
+\end_layout
+
+\end_inset
+
+).
+ Procedure: To setup the analysis we run '
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+textit{./ps1a1.sh}
+\end_layout
+
+\end_inset
+
+' once, then to compare different years we run 
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+textit{./ps1a2.sh}
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+newline
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+ps1a1.sh consists of - BASH CODE:
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+<<bash4,eval=FALSE, engine='bash'>>=
+\end_layout
+
+\begin_layout Plain Layout
+
+wget -O apricots.zip 
+\end_layout
+
+\begin_layout Plain Layout
+
+"http://data.un.org/Handlers/DownloadHandler.ashx?DataFilter=itemCode:526
+\end_layout
+
+\begin_layout Plain Layout
+
+&DataMartId=FAO&Format=csv&c=2,3,4,5,6,7&s=countryName:asc,elementCode:asc,year:
+desc" 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+unzip -p apricots.zip > apricots.csv 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+sed 's/"//g' apricots.csv | sed 's/.0000//g' | grep "+" > region.csv 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+sed 's/"//g' apricots.csv | sed 's/.0000//g' | grep -v "+" | tail -n +2 
+\end_layout
+
+\begin_layout Plain Layout
+
+| head -n -7 > country.csv
+\end_layout
+
+\begin_layout Plain Layout
+
+@
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+newline
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+ps1a2.sh (that can be used for automated and repeated analysis, since it
+ only takes user input for the year to analyze and then prints out the result
+ in a list) consists of - BASH CODE:
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+<<bash5,eval=FALSE, engine='bash'>>=
+\end_layout
+
+\begin_layout Plain Layout
+
+read -p "Enter the year you want to examine : " year 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+echo "$(grep $year country.csv | grep "Area Harvested" | sort -n -t, -k6,6
+ | tail -n5)"
+\end_layout
+
+\begin_layout Plain Layout
+
+@
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+newline
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+textbf{ANSWER:} The rankings have changed much over the years.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+1.
+ b)
+\end_layout
+
+\begin_layout Standard
+We define the function ID.
+ Then we take a user input for the variable number, with the function read.
+ We input the item number in the URL with ${number} to specify that it is
+ a variable and we want the output.
+ We unzip the data and then echo the output on the screen.
+ The stdout of the function can then be used with other commands and stored
+ in other data files.
+ It is just to use e.g.
+ '$ ID 
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+$>$
+\end_layout
+
+\end_inset
+
+ 526data.csv' in order to store the output in a file.
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+textbf{Bash code:}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+<<bash6,eval=FALSE, engine='bash'>>=
+\end_layout
+
+\begin_layout Plain Layout
+
+wget -O apricots.zip
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+function ID {
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+read -p "Enter ID : " number 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+wget -O file.zip "http://data.un.org/Handlers/DownloadHandler.ashx?
+\end_layout
+
+\begin_layout Plain Layout
+
+DataFilter=itemCode:${number}
+\end_layout
+
+\begin_layout Plain Layout
+
+&DataMartId=FAO&Format=csv&c=2,3,4,5,6,7&s=countryName:asc,elementCode:asc,year:
+desc"
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+unzip -p file.zip > data.csv 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+echo "$(cat data.csv)" 
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\begin_layout Plain Layout
+
+@
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Problem 2
+\end_layout
+
+\begin_layout Standard
+We place the code below in a shell script called txtdownload.sh, we change
+ the file with 
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+verb;$ chmod uog+x txtdownload.sh;
+\end_layout
+
+\end_inset
+
+ so that it is executable.
+ We run the file in the terminal with ./txtdownload.sh
+\end_layout
+
+\begin_layout Standard
+Procedure:
+\end_layout
+
+\begin_layout Standard
+First we download the html file with wget (specifically only looking for
+ .html, wget is always -q now so that the only output is what is downloaded).
+ Then we specify the file names and assign them to a variable using grep
+ at the html file (looking for those specific strings that ends in .txt and
+ has a pattern before them, in this case ' 
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+href="
+\end_layout
+
+\end_inset
+
+ ', we remove the patterns around to obtain the file names)
+\end_layout
+
+\begin_layout Standard
+After that we store the url in a variable and then create a for loop where
+ wget fetches the file names stored in the variable and then prints out
+ what file is being downloaded.
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+textbf{---- BASH CODE INSIDE SCRIPT: txtdownload.sh ----}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+<<bash7,eval=FALSE, engine='bash'>>=
+\end_layout
+
+\begin_layout Plain Layout
+
+wget -q -A html http://www1.ncdc.noaa.gov/pub/data/ghcn/daily/ 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+url='http://www1.ncdc.noaa.gov/pub/data/ghcn/daily'
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+filenames=$(grep -o -P '(?<=href=").*(?=.txt)' index.html | grep -o -P '.*(?=")')
+ 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+for filenames in ${filenames}
+\end_layout
+
+\begin_layout Plain Layout
+
+do
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+    echo "Now downloading ${filenames}"
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+    wget -q ${url}/${filenames} 
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+done
+\end_layout
+
+\begin_layout Plain Layout
+
+@
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+newline
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Problem 3 (see result at next page)
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+newpage
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+%%SOLUTION FOR PROBLEM THREE BELOW
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+clearpage 
+\backslash
+setcounter{page}{4}
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent 
+\backslash
+textbf{The result of your solution to Problem 3 should look like this page}
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+vspace{3mm}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent
+\end_layout
+
+\end_inset
+
+ The height of the water level in Lake Huron fluctuates over time.
+ Here I ’analyze’ the variation using R.
+ I show a histogram of the lake levels for the period 
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+Sexpr{tsp(LakeHuron)[1]}
+\end_layout
+
+\end_inset
+
+ to 
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+Sexpr{tsp(LakeHuron)[2]}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+<<hist, fig.pos="t", fig.height=4, fig.width=3.3>>=   
+\end_layout
+
+\begin_layout Plain Layout
+
+hist(LakeHuron)
+\end_layout
+
+\begin_layout Plain Layout
+
+@
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent
+\end_layout
+
+\end_inset
+
+ 
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+<<eval, eval=FALSE>>=
+\end_layout
+
+\begin_layout Plain Layout
+
+lowHi <- c(which.min(LakeHuron), which.max(LakeHuron))
+\end_layout
+
+\begin_layout Plain Layout
+
+yearExtrema <- attributes(LakeHuron)$tsp[1]-1 + lowHi
+\end_layout
+
+\begin_layout Plain Layout
+
+@
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+noindent
+\end_layout
+
+\end_inset
+
+ 
+\end_layout
+
+\end_body
+\end_document
