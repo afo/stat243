@@ -1,0 +1,311 @@
+%% LyX 2.1.4 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass{article}
+\usepackage[latin9]{inputenc}
+\usepackage{geometry}
+\geometry{verbose,tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+\usepackage[authoryear]{natbib}
+\usepackage[unicode=true,pdfusetitle,
+ bookmarks=true,bookmarksnumbered=false,bookmarksopen=false,
+ breaklinks=false,pdfborder={0 0 1},backref=section,colorlinks=false]
+ {hyperref}
+\usepackage{breakurl}
+\begin{document}
+
+\title{PS2 - STAT 243}
+
+
+\author{Alexander Fred Ojala\\
+Student ID: 26958060\\
+afo@berkeley.edu}
+
+
+\date{September 18th 2015}
+
+\maketitle
+<<setup, include=FALSE>>=
+# include any code here you don't want to show up in the document,
+# e.g., package and dataset loading
+require(ggplot2)
+set.seed(0)
+# also a good place to set global chunk options
+library(knitr) # need this for opts_chunk command
+opts_chunk$set(fig.width = 5, fig.height = 5)
+# if we wanted chunks by default not to be evaluated
+# opts_chunk$set(eval = FALSE) 
+@ 
+
+
+\section{Problem 1}
+
+
+\subsection{1. a)}
+
+First the analysis was setup. The data file was downloaded into the
+working directory with \textit{download.file}. Then the header was
+extracted in order to define what column strings to work with. After
+that an implemented function, \textit{findCols.R} was run, that returns
+the indices of the columns that we want to work with and a vector
+with the same length as the total number of columns in the data set
+that defines all column classes at the correct position (the class
+'character' was used throughout, and not 'numeric, in order to capture all the zeros in front
+of a number). All other entries in the colclass vector are set to
+'NULL'. Last the column indices were written to a file, that later
+will be used when pre-processing the data in bash (see Problem 1 c)
+):
+
+<<r1,eval=TRUE,cache=FALSE>>=
+## Initial setup ---- 
+set.seed(0) 
+setwd("~/src/stat243/ps2/")
+download.file('http://www.stat.berkeley.edu/share/paciorek/ss13hus.csv.bz2','dat.csv.bz2')
+#Download file, name it dat.csv.bz2
+
+## Find column indicies and set column classes ----
+
+head<-readLines(bzfile("dat.csv.bz2"),1) # Extract data header 
+cols=c("ST", "NP", "BDSP", "BLD", "RMSP", "TEN", "FINCP","FPARC", "HHL", "NOC", "MV", "VEH", "YBL") 
+#specify the columns to work with
+
+source("findCols.R") #function to find column indices and column classes 
+
+index<-findCols(head,cols)[[1]]
+colclass<-findCols(head,cols)[[2]]
+cols<-findCols(head,cols)[[3]] #the correct placement of the columns in the vector
+
+cols
+
+cat(index,sep=",",file="index.txt") #input for bash pre-processing
+@
+
+\noindent
+\newline
+
+After that the total number of rows in the data is counted below (this
+only needs to be done once, and is easier to do in bash while preprocessing the data - see the section 1 c) ). When that was done the parameters
+for the analysis were defined, namely sample size, block size (chunks)
+and the total number of lines to be read (n). 
+
+The function sample is used to define the random sample (where the
+last row deliberately is excluded, because of a problem with readLines
+and the header in 1b) )
+
+<<r2,eval=TRUE,cache=FALSE>>=
+## Count number of lines in data file ---- 
+con <- file("dat.csv.bz2",open="r") 
+chunks <- 20000 
+nLines <- 0 
+( while((linesread <- length(readLines(con,chunks))) > 0 ) 
+  nLines <- nLines+linesread ) 
+close(con)
+nLines
+#Takes some time, only has to be done once
+#Can be done using bash pre-processing, see 1 c)
+
+## Setup data chunks, sample size and total number of lines ----
+sampleSize=10000
+blockSize=100000 #read in 100.000 rows at a time 
+n=nLines # Total lines to read in
+
+use1 = sort(sample(n-1,sampleSize)) 
+# Random sample from the whole data set
+@
+
+\noindent
+\newline
+
+After that a random sample of the data is obtained by the implemented
+\textit{readcsv.R} function and the output is the subset as well
+as the running time. The result was written to a .CSV file with the
+function write.table (where the function parameters were set to no
+quotations, no row.names, and the same seperator ``,'' as the original
+data).
+
+<<r4,eval=TRUE,cache=FALSE>>=
+source("readcsv.R")
+result<-readCSV(data = "dat.csv.bz2",blockSize = blockSize, sampleSize = sampleSize, 
+                n = n, use = use1)
+subsetRCSV<-result[[1]] 
+RCSVtime<-result[[2]] 
+rm(result)
+subsetRCSV[1:5,]
+
+## Print out random sample to csv file
+write.table(subsetRCSV,sep=",",quote=FALSE,row.names=FALSE,file="dat.csv") 
+#prints output to file dat.csv
+
+
+@
+
+\noindent
+\newline
+
+The content in \textit{readcsv.R} can be seen below. Where the function
+takes user defined input in order to extract a correct sample set
+(it has been verifiied to extract the exact correct random rows as
+compared to when just a large subset of the full data was read in
+and then the sam indicies were extracted). The method used to read
+in the file sequentially was to open a bzfile connection with the
+option 'r' and then extract the correct rows from every block / chunk
+that was read in. Also the option with specified \textit{colClasses}
+was used to only read in the data that was needed and to speed up
+the process.
+
+<<r5,eval=FALSE>>=
+## read.csv method for extracting data
+
+readCSV = function(data,blockSize,sampleSize,n,use)
+{
+subsetRCSV<-data.frame(matrix("NA",sampleSize,length(cols)),
+                       stringsAsFactors=FALSE) 
+#create full data frame in advance
+names(subsetRCSV)<-cols #correct header
+it=1 #iteration
+con <- bzfile(description=data, open="r")
+RCSVtime<-print(system.time(for(i in 1:ceiling(n/blockSize)) {
+  if(i==1) {
+    tmp <- read.csv(con, nrow=blockSize, sep = ',', stringsAsFactors=FALSE,
+                    header=TRUE, colClasses = colclass)
+#don't extract header
+  }
+  else {
+    tmp <- read.csv(con, nrow=blockSize, sep = ',', stringsAsFactors=FALSE, 
+                    header=FALSE, colClasses = colclass)
+  }
+  activeIndex<-which(use<=blockSize & use>0)
+# see if we have reached index of random sample
+  if(length(activeIndex)>0) {
+    subsetRCSV[it:(it+length(activeIndex)-1),]<-tmp[use[activeIndex],]
+    it=it+length(activeIndex)
+#extract random sample(s)
+  }
+  use=use-blockSize
+}
+))
+close(con)
+return(list(subsetRCSV,RCSVtime))
+}
+@
+
+\noindent
+\newline
+
+
+\subsection{1. b)}
+
+Approximately the same solution was implemented for the \textit{readLines}
+solution as for the \textit{read.csv}. 
+
+The skip option was also tested (to skip to the nth row in the data
+and extract that exact row sample) for both of the commands readLines
+and read.csv, but that slowed down the process immensly as R had to
+read through the whole data file in order to get to every n:th row.
+
+The result obtained was that the readLines method only took about seven minutes, while the read.csv method took about 25 minutes to read (the first run, when not compiling the pdf it took about 20 mins). The result can be seen in the first code
+section below. 
+\newline
+This was kind of surprising (my notion was that \textit{read.csv()}
+was gonna perform better, since it had done so for all sample sizes and total number of lines (n) that was significantly smaller). The data in the readLines method is extracted in an inefficient way as I could not find a solution
+on how to extract the correct rows and columns without using \textit{strsplit}
+on tmp and then implement the for loop inside the last if statement
+extracting one row at a time as data frame from tmp. This clearly
+makes the code inefficient and there should be a more elegant solution, but evidently it was more time efficient for the whole data set as can be seen in the output.
+
+<<r6,eval=TRUE,cache=FALSE>>=
+## Problem b) Compare with readLine
+source("readL.R") 
+result<-readL(data = "dat.csv.bz2",blockSize = blockSize, 
+              sampleSize = sampleSize, n = n, use = use1) 
+subsetRL<-result[[1]] 
+RLtime<-result[[2]] 
+rm(result)
+
+subsetRL[1:5,] #to check against subsetRCSV
+
+RCSVtime
+RLtime
+@
+
+<<r7,eval=FALSE>>=
+## readLines method to read in sample
+
+readL = function(data,blockSize,sampleSize,n,use)
+{
+  subsetRL<-data.frame(matrix("NA",sampleSize,length(cols)),
+                       stringsAsFactors=FALSE)
+  names(subsetRL)<-cols
+  use=use1+1
+  it=1 #iteration
+  
+  con <- bzfile(description="dat.csv.bz2", open="r")
+  RLtime1<-print(system.time(for(i in 1:10) {
+    tmp <- readLines(con,n=blockSize)
+    tmp<-strsplit(tmp,",")
+    activeIndex<-which(use<=blockSize & use>0)
+    if(length(activeIndex)>0) {
+      for(j in 1:length(activeIndex)) {
+        subsetRL[it,]<-tmp[[use[activeIndex[j]]]][index]
+        it=it+1
+      }
+    }
+    use=use-blockSize
+  }
+  
+  ))
+  close(con)
+  return(list(subsetRCSV,RLtime1))
+}
+@
+
+\noindent
+\newline
+
+
+\subsection{1. c)}
+
+The data can be pre-processed in bash so that we obtain a data file
+with only the columns of interest and the row index can be added to
+the beginning of the data at every line - so that the data contains
+a unique sample number. This also directly gives us the number of
+rows in the data.
+
+The bash code to do this is specified below. Where \verb;bunzip2 -c;
+reads the data sequentially, \verb;cut; extracts the columns of interest
+(using index.txt as created with R in problem 1 a) ), \verb;nl -s, -w1 -v0;
+prepends the line number in the correct format and \verb;bzip2; stores
+the data in a zip file again. Below only showed for the first five
+rows
+
+<<bash1,eval=TRUE,cache=FALSE,engine='bash'>>=
+## Problem c) Pre-processing in bash ----
+bunzip2 -c dat.csv.bz2 | head -10 | cut -d, -f$(cat index.txt) | nl -s, -w1 -v0 | bzip2 > dat2.csv.bz2
+
+bunzip2 -c dat2.csv.bz2 | head -5
+@
+
+\noindent
+\newline
+
+
+\subsection{1. d)}
+
+Lastly, two cross tabulations were executed. The first one checking the number of bedrooms in a unit against the total number of rooms. The second the number of persons in a unit against the number of children. In order for the analysis to be somewhat correct the pattern should be that the majority of values are concentrated to the diagonal of the tables.
+
+
+<<r8,eval=TRUE,cache=FALSE>>=
+## Problem d) Cross-tabulation
+nbrBedrooms<-as.numeric(subsetRCSV$BDSP)
+nbrRooms<-as.numeric(subsetRCSV$RMSP)
+table(nbrBedrooms,nbrRooms) 
+#number of rooms cross-tabbed with number of bedrooms 
+
+nbrPersons<-as.numeric(subsetRCSV$NP)
+nbrChildren<-as.numeric(subsetRCSV$NOC)
+table(nbrChildren,nbrPersons) 
+#number of persons in household cross-tabbed with number of children
+
+@
+
+\noindent
+\newline
+\end{document}
