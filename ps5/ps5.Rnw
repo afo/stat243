@@ -1,0 +1,315 @@
+%% LyX 2.1.4 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass{article}
+\usepackage[latin9]{inputenc}
+\usepackage{geometry}
+\usepackage{adjustbox}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{bbm}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{datetime}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{empheq}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\geometry{verbose,tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+\usepackage[authoryear]{natbib}
+\usepackage[unicode=true,pdfusetitle,
+ bookmarks=true,bookmarksnumbered=false,bookmarksopen=false,
+ breaklinks=false,pdfborder={0 0 1},backref=section,colorlinks=false]
+ {hyperref}
+\usepackage{breakurl}
+\begin{document}
+
+\title{PS5 - STAT 243}
+
+
+\author{Alexander Fred Ojala\\
+Student ID: 26958060\\
+\small{\textbf{Collaborators:} Guillame Baquiast and Milos Atz}}
+
+
+\date{October 19th 2015}
+
+\maketitle
+<<setup, include=FALSE>>=
+# include any code here you don't want to show up in the document,
+# e.g., package and dataset loading
+require(ggplot2)
+set.seed(0)
+# also a good place to set global chunk options
+library(knitr) # need this for opts_chunk command
+opts_chunk$set(fig.width = 5, fig.height = 5)
+# if we wanted chunks by default not to be evaluated
+# opts_chunk$set(eval = FALSE) 
+set.seed(0)
+setwd("~/src/stat243/ps5")
+library(stringr)
+library(curl)
+library(methods)
+library(XML)
+library(RCurl)
+library(gsubfn)
+library(devtools)
+library(microbenchmark)
+require(rbenchmark)
+library(pryr)
+options(stringsAsFactors = FALSE)
+@ 
+
+
+\section{Problem 1}
+
+\subsection{1. a)}
+
+
+
+% \begin{figure}[H]
+% \centering
+% \includegraphics[scale=0.6]{debug.png}
+% \caption{Debugging of tmp(), where the local and global value of .Random.seed is checked in several steps}
+% \label{fig-debug}
+% \end{figure}
+
+
+The numbers in R are typically stored as doubles. This is a binary format occupying 8 bytes per number and its precision is 53 bits (about 16 decimal digits). R has in general, has approximately 16 digits of accuracy and uses finite precision arithmetic. Therefore any number cannot be trusted in its precision after the 16 digit representation (counted from the first digit $\neq 0$). Since the number 1.000000000001 consists of 13 digits we can expect that we would have 16 digits of accuracy if we store this number in R. (The addition of numbers needs to be done so that the smaller numbers of size $10^{-16}$ are added first and after that we can add the one in order not to perform operations on a number consisting of 17 digits (e.g. $1+10\cdot 10^{-16}$))
+
+
+\subsection{1. b)}
+
+The calculations below result in the correct answer, as expected. The answer should be $1 + 10^{-12}$ and this is the result that R produces carrying out the calculations. Also note that we have 16 digits of accuracy for the number stored in the variable: $xReal$.
+
+<<r1,eval=TRUE,cache=FALSE>>=
+options("scipen"=TRUE, "digits"=22)
+
+#SETUP VECTOR
+x=rep(1*10^-16,10001)
+x[1]=1
+
+
+##DEFINE REAL, FOR COMPARISON
+xReal=1.000000000001
+xReal #Ok 16 digits of accuracy (18th digit is an 8, making the 17th a 1 if rounded)
+xReal-1 #OK 1*10^12
+
+
+#SUM
+xSum=sum(x)
+xSum # Ok, 16 numbers of accuracy, the 17:th digit is a 6 (it should be a 9)
+xSum-1 # Ok 1*10^-12
+
+
+#COMPARE
+xReal-xSum #16 numbers of accuracy, the 17th digit is different
+@
+
+\noindent
+\newline
+
+
+\subsection{1. c)}
+
+The same result was not obtained in Python. Python's sum function only returns the answer 1 (the answer should be $1 + 10^{-12}$). (It has to do with the fact that Python tries to add the numbers sequentially, in adding the number 1 is added first and then the $10^{-16} \cdot 10000$ - this cannot be done since we do not have 17 digits of accuracy.)
+\newline
+\newline
+\textbf{N.B.} I needed to use the print function for knitr to display results. Prints are printed chronologically at the bottom of the code block below:
+
+<<pyt1,engine='python'>>=
+import numpy as np
+from decimal import * #import all from decimal package*
+  
+#SETUP VECTOR
+x = np.repeat(1e-16,10001)
+x[0] = 1
+
+#REAL, FOR COMPARISON
+xReal = 1.000000000001 # store answer number and print
+print Decimal(xReal) #1st PRINT
+
+
+#SUM
+xSum = np.sum(x)
+print Decimal(xSum) #2nd PRINT. Not OK, equals 1
+
+
+#REVERSE SUM (NB OPTIONAL)
+x[0] = 1e-16
+x[10000] = 1
+xSumReverse = np.sum(x)
+print Decimal(xSumReverse) #3rd PRINT. this is OK, 1+10e-12
+
+@
+
+\noindent
+\newline
+
+
+\subsection{1. d)}
+
+Instead implementing a for loop and summing Forward (adding the number 1.000... first) and Reverse (adding the number 1.000... last) one vector element of a time. In R we obtain the results below.
+\newline
+\newline
+As noted earler summing the smaller numbers first only results in the answer 1(.00000...) which has 12 digits of accuracy, the 13th digit should be a 1. It should also be noted that no matter what amount of $10^{-16}$ we add to one would result in 1 (here ten thousand, but even millions or any arbitrary number would result in 1 when we use a loop and add 1 first). When we sum the numbers in Reverse we have 16 digits of accuracy, precisely as was the result with the sum function.
+
+<<r2,eval=TRUE,cache=FALSE>>=
+
+## FORWARD LOOP, remember that x[1]=1
+
+xSumLoopForward=0
+
+for (i in 1:length(x)) {
+  xSumLoopForward = x[i] + xSumLoopForward
+}
+
+xSumLoopForward #wrong only returns 1
+
+
+## REVERSE LOOP
+xSumLoopReverse=0
+
+for (i in length(x):1) {
+  xSumLoopReverse = x[i] + xSumLoopReverse
+}
+
+xSumLoopReverse #OK, same result as the sum function
+
+@
+
+Implementing the same solution in Python yields exactly the same results as in R, which can be seen below:
+
+<<py2,engine='python'>>=
+import numpy as np
+from decimal import * #import all from decimal package*
+
+#CREATE VECTOR
+x = np.repeat(1e-16,10001)
+x[0] = 1
+
+
+#FORWARD LOOP
+xSumLoopForward=0
+
+for i in range(0,len(x)):
+  xSumLoopForward=x[i]+xSumLoopForward
+
+print Decimal(xSumLoopForward) #1st PRINT. Not OK, only returns 1
+
+
+#RERVERSE LOOP
+xSumLoopReverse=0
+
+for i in range(len(x)-1,-1,-1): #Reverse loop, begins at x[10000], terminates at x[0]
+  xSumLoopReverse=x[i]+xSumLoopReverse
+
+print Decimal(xSumLoopReverse) #2nd PRINT. OK, returns correct result, as expected
+
+
+@
+
+
+
+
+\subsection{1. e)}
+
+R's sum function did not return $1$ as the result (as R did when we used a for loop to sum sequentially over the array $x$, when $x[1]=1$), but it retruned a result that was correct with 16 digits of accuracy, namely $1+10^{-12}$. This suggests that R's sum function does not simply add numbers from the left to the right, but adds numbers of approximately the same magnitude first (in this case the ten thousand smaller numbers, $10^{-16}$) and then adds numbers of larger magnitude after that operation has been performed in order to keep the accuracy of the result. This prevents the precision of numbers and their representation to affect the results of the sum function if R is able to avoid it (and not carry out the summation in a 'dumb' way).
+
+
+
+\section{Problem 2}
+
+A function called $timing$ was implemented, which uses R's benchmark function (a wrapper aroun system.time) over two operations carried out 5 times each on an integer vector and a floating point vector. The results presented are the mean time for evaluation of the functions (total time (named $elapsed$), system time (named $sys.self$) and user time (named $user.self$)) as well as the relative total time it took for the functions to be evaluated (given under the column $relative$).
+\newline
+\newline In the Documentation of $proc.time$ it says that: "The 'system time' is the CPU time charged for execution by the system on behalf of the calling process. [..] The 'user time' is the CPU time charged for the execution of user instructions of the calling process."
+\newline
+\newline
+\textbf{N.B.} All functions below have been tested so that they perserve the type (checked with R function $typeof()$) when the operation has been carried out. That is also why I did not include the result of e.g. division, because it transformed the integer array into a double in order to carry out the operation.
+\subsection{Results}
+\begin{itemize}
+\item \textbf{Arithmetic operations:} The system time is almost half for all the integer arithmetic operations. However the user time is almost always more than twice as fast for the float arithmetic operations. Also the user time takes about 4 times as much time for the integer operations compared to its own system time. Therefore the elapsed time for the floating number arithmetic operations are always quicker in R if we look at the tests.
+\item \textbf{Subsetting:} For subsetting vectors it is the reverse. The system time is (almost always, a bit) faster for floating point numbers, while the user time is a lot faster for integer numbers. All types of subsetting is quicker with integer vectors for both system and user time.
+\item \textbf{Other interesting operations:} When we try other operations like $mean$, $max$ and $median$ the integer vectors generally are faster than the floating point vectors (the time results are about the same for the max operation).
+\end{itemize}
+
+\subsection{Conclusion}
+Many of the results were unexptected and inconsistent in the results. The notion was that the integer operations would perform better overall, however it did not. Especially it was unexpected that the arithmetic operation was faster (user time and total time) for the floating point numbers.
+
+<<r4,eval=TRUE,cache=FALSE>>=
+#SETUP AND VECTOR CHECK
+vecInt<-rep(1:10,10^7)
+vecFloat<-as.double(vecInt)
+
+typeof(vecInt)
+typeof(vecFloat)
+
+object_size(vecInt)
+object_size(vecFloat)
+
+options(digits=4)
+
+#Define function for timing
+timing <- function(int,float) {
+  cat("Operations: \nint = ")
+  print(int)  
+  cat("float = ")
+  print(float)
+  benchmark(int=eval(int),float=eval(float),replications = 5, columns=c('test','elapsed','user.self','sys.self','relative'))
+}
+
+## ARITHMETIC TIMING
+
+#Sum
+timing( quote(sum(vecInt)) , quote(sum(vecFloat)) )
+
+#Multiplication
+timing( quote(vecInt*vecInt) , quote(vecFloat*vecFloat) )
+
+#Addition
+timing( quote(vecInt+vecInt) , quote(vecFloat+vecFloat) )
+
+#Subtraction
+timing( quote(vecInt-vecInt) , quote(vecFloat-vecFloat) )
+
+#Multiplication of constant
+timing( quote(10L*vecInt) , quote(as.double(10)*vecFloat) )
+
+#Addition of constant
+timing( quote(10L+vecInt) , quote(as.double(10)+vecFloat) )
+
+
+## SUBSETTING
+
+#Extract first million values
+timing( quote(vecInt[1:10^6]) , quote(vecFloat[1:10^6]) )
+
+#Extract every tenth value
+timing( quote(vecInt[seq(10,10^8,10)]) , quote(vecFloat[seq(10,10^8,10)] ))
+
+#Extract random sample
+set.seed(0)
+smp<-sample(1:10^8,10^7)
+timing( quote(vecInt[smp]) , quote(vecFloat[smp]) )
+
+#Extract unique values
+timing( quote(unique(vecInt)) , quote(unique(vecFloat)) )
+
+
+## OTHER INTERESTING FUNCTIONS
+
+#Max value
+timing( quote(max(vecInt)) , quote(max(vecFloat)) )
+
+#Mean value
+timing( quote(mean(vecInt)) , quote(mean(vecFloat)) )
+
+#Median
+timing( quote(median(vecInt)) , quote(median(vecFloat)) )
+@
+
+
+
+\end{document}
