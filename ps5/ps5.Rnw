@@ -100,7 +100,7 @@ xReal-1 #OK 1*10^12
 
 #SUM
 xSum=sum(x)
-xSum # Ok, 16 numbers of accuracy, the 17:th digit is a 6 (it should be a 9)
+xSum # Ok 1+10^-12, (16 numbers of accuracy, 17:th digit is 6 (it should be a 9))
 xSum-1 # Ok 1*10^-12
 
 
@@ -114,7 +114,7 @@ xReal-xSum #16 numbers of accuracy, the 17th digit is different
 
 \subsection{1. c)}
 
-The same result was not obtained in Python. Python's sum function only returns the answer 1 (the answer should be $1 + 10^{-12}$). (It has to do with the fact that Python tries to add the numbers sequentially, in adding the number 1 is added first and then the $10^{-16} \cdot 10000$ - this cannot be done since we do not have 17 digits of accuracy.)
+The same result was not obtained in Python. Python's sum function only returns the answer 1 (the answer should be $1 + 10^{-12}$). (It has to do with the fact that Python tries to add the numbers sequentially, in adding the number 1 is added first and then the $10^{-16} \cdot 10000$, and this cannot be done since we do not have 17 digits of accuracy.)
 \newline
 \newline
 \textbf{N.B.} I needed to use the print function for knitr to display results. Prints are printed chronologically at the bottom of the code block below:
@@ -129,11 +129,13 @@ x[0] = 1
 
 #REAL, FOR COMPARISON
 xReal = 1.000000000001 # store answer number and print
+print 'Correct answer, for reference:'
 print Decimal(xReal) #1st PRINT
 
 
 #SUM
 xSum = np.sum(x)
+print 'Sum over the array:'
 print Decimal(xSum) #2nd PRINT. Not OK, equals 1
 
 
@@ -141,6 +143,7 @@ print Decimal(xSum) #2nd PRINT. Not OK, equals 1
 x[0] = 1e-16
 x[10000] = 1
 xSumReverse = np.sum(x)
+print 'Reverse sum over the array (1 added last):'
 print Decimal(xSumReverse) #3rd PRINT. this is OK, 1+10e-12
 
 @
@@ -154,7 +157,7 @@ print Decimal(xSumReverse) #3rd PRINT. this is OK, 1+10e-12
 Instead implementing a for loop and summing Forward (adding the number 1.000... first) and Reverse (adding the number 1.000... last) one vector element of a time. In R we obtain the results below.
 \newline
 \newline
-As noted earler summing the smaller numbers first only results in the answer 1(.00000...) which has 12 digits of accuracy, the 13th digit should be a 1. It should also be noted that no matter what amount of $10^{-16}$ we add to one would result in 1 (here ten thousand, but even millions or any arbitrary number would result in 1 when we use a loop and add 1 first). When we sum the numbers in Reverse we have 16 digits of accuracy, precisely as was the result with the sum function.
+As noted earler summing the smaller numbers first only results in the answer 1(.00000...) which in this example has 12 digits of accuracy, the 13th digit should be a 1. However it should be noted that no matter what amount of $10^{-16}$ we add to one would result in 1 (here ten thousand, but even millions or any arbitrary number would result in 1 when we use a loop and add 1 first). When we sum the numbers in Reverse we have 16 digits of accuracy, precisely as was the result with the sum function.
 
 <<r2,eval=TRUE,cache=FALSE>>=
 
@@ -197,6 +200,7 @@ xSumLoopForward=0
 for i in range(0,len(x)):
   xSumLoopForward=x[i]+xSumLoopForward
 
+print 'Forward Loop sum (1 added first):'
 print Decimal(xSumLoopForward) #1st PRINT. Not OK, only returns 1
 
 
@@ -206,6 +210,7 @@ xSumLoopReverse=0
 for i in range(len(x)-1,-1,-1): #Reverse loop, begins at x[10000], terminates at x[0]
   xSumLoopReverse=x[i]+xSumLoopReverse
 
+print 'Reverse Loop sum (1 added last):'
 print Decimal(xSumLoopReverse) #2nd PRINT. OK, returns correct result, as expected
 
 
@@ -216,7 +221,7 @@ print Decimal(xSumLoopReverse) #2nd PRINT. OK, returns correct result, as expect
 
 \subsection{1. e)}
 
-R's sum function did not return $1$ as the result (as R did when we used a for loop to sum sequentially over the array $x$, when $x[1]=1$), but it retruned a result that was correct with 16 digits of accuracy, namely $1+10^{-12}$. This suggests that R's sum function does not simply add numbers from the left to the right, but adds numbers of approximately the same magnitude first (in this case the ten thousand smaller numbers, $10^{-16}$) and then adds numbers of larger magnitude after that operation has been performed in order to keep the accuracy of the result. This prevents the precision of numbers and their representation to affect the results of the sum function if R is able to avoid it (and not carry out the summation in a 'dumb' way).
+R's sum function did not return $1$ as the result (as R did when we used a for loop to sum sequentially over the array $x$, when $x[1]=1$), but it retruned a result that was correct with 16 digits of accuracy (if we count the ceiling/rounding up of a digit 9 as the correct result), namely $1+10^{-12}$ . This suggests that R's sum function does not simply add numbers from the left to the right, but adds numbers of approximately the same magnitude first (in this case the ten thousand smaller numbers, $10^{-16}$) and then adds numbers of larger magnitude after that operation has been performed in order to keep the accuracy of the result. This prevents the precision of numbers and their representation to affect the results of the sum function if R is able to avoid it (and not carry out the summation in a 'dumb' way).
 
 
 
@@ -227,7 +232,7 @@ A function called $timing$ was implemented, which uses R's benchmark function (a
 \newline In the Documentation of $proc.time$ it says that: "The 'system time' is the CPU time charged for execution by the system on behalf of the calling process. [..] The 'user time' is the CPU time charged for the execution of user instructions of the calling process."
 \newline
 \newline
-\textbf{N.B.} All functions below have been tested so that they perserve the type (checked with R function $typeof()$) when the operation has been carried out. That is also why I did not include the result of e.g. division, because it transformed the integer array into a double in order to carry out the operation.
+\textbf{N.B.} All functions below have been tested so that they perserve the type (checked with R function $typeof()$) when the operation has been carried out. That is also why I used the $\%/\%$-operator to carry out the integer division, because otherwise R would transform the integer array into a double in order to carry out the operation.
 \subsection{Results}
 \begin{itemize}
 \item \textbf{Arithmetic operations:} The system time is almost half for all the integer arithmetic operations. However the user time is almost always more than twice as fast for the float arithmetic operations. Also the user time takes about 4 times as much time for the integer operations compared to its own system time. Therefore the elapsed time for the floating number arithmetic operations are always quicker in R if we look at the tests.
@@ -267,6 +272,9 @@ timing( quote(sum(vecInt)) , quote(sum(vecFloat)) )
 
 #Multiplication
 timing( quote(vecInt*vecInt) , quote(vecFloat*vecFloat) )
+
+#Division, %/% forces integer division
+timing( quote(vecInt%/%vecInt), quote(vecFloat/vecFloat))
 
 #Addition
 timing( quote(vecInt+vecInt) , quote(vecFloat+vecFloat) )
