@@ -65,7 +65,7 @@ options(stringsAsFactors = FALSE)
 
 \section{Problem 1}
 
-For Problem 1 the R code below was run in the EC2 environment. First the file was downloaded and unzipped so that we had access to all the .csv files. The important thing to note is that we use $append=TRUE$ in the $dbWriteTable$ function to sequentially load in the data in the for loop. The result is presented below the code.
+For Problem 1 the R code below was run in the EC2 environment. First the file was downloaded and unzipped so that we had access to all the .csv files. The important thing to note is that we use $append=TRUE$ in the $dbWriteTable$ function to sequentially load in the data into one table in the SQLite database, here using a for loop. The implementation is presented below the code.
 
 <<r,eval=FALSE,cache=FALSE>>=
 library(RSQLite)
@@ -75,27 +75,28 @@ options(stringsAsFactors = FALSE)
 ## Problem 1 ----- DOWNLOADING
 url="http://www.stat.berkeley.edu/share/paciorek/1987-2008.csvs.tgz"
 download.file(url,destfile = "data.tgz")
-system("tar -xzvf data.tgz")
-system("bunzip2 -vv *")
+system("tar -xzvf data.tgz") #untar the data.tgz file
+system("bunzip2 -vv *") #unzip all the bz2-files
 
 
 #CREATING THE DATABASE
 
 fileName <- "airline.db"
-db <- dbConnect(SQLite(), dbname = fileName) #setup clean database
+db <- dbConnect(SQLite(), dbname = fileName) #setup connection to a db
 
 yrs=seq(1987,2008) 
 files=paste(yrs,".csv",sep="") #create string with all file names
 
-#below we read in the data into the table for every year
+#below we read in the data into one table, seqeuntially for every year
 for (i in 1:length(yrs)) {
   dbWriteTable(conn = db, name = "airData", value = files[i], 
                row.names = FALSE, header = TRUE, append = TRUE)
   print(i) #only to see the progress
 }
 
-#Set numeric code to all the NA values (could be done for any of the columns)
-#THIS command IS NOT ACCTUALLY USED, instead we remove the values for DepDelay='NA' in 2 a)
+#Set numeric code to all the NA values (could be done for any of the numeric columns:
+#DepTime, DayOfWeek, Month, DepTime)
+#THIS command IS NOT USED, instead subset and remove values DepDelay='NA' in 2 a)
 query <- "UPDATE airData SET DepDelay=123456789 WHERE DepDelay='NA'"
 dbGetQuery(db, query)
 
@@ -104,7 +105,7 @@ dbGetQuery(db, query)
 \noindent
 \newline
 
-The result of doing this is that the file size of $airline.db$ is approximately 11.3514GB. So it is a lot larger than the zipped bz2 file (1.7GB), but slightly smaller than the original CSV (12GB). See print out from the EC2 instance in the Figure \ref{fig-airstore}
+The result of doing the above operations (except altering the table, replacing NA's) gives that the file size of $airline.db$ is approximately 11.3514GB. So it is a lot larger than the zipped tgz file (1.7GB), but slightly smaller than the original CSV (12GB). See print out of the size from the EC2 instance in the Figure \ref{fig-airstore}.
 
 
 \begin{figure}[H]
@@ -120,8 +121,8 @@ The result of doing this is that the file size of $airline.db$ is approximately 
 
 \textbf{RSQLite solution:}
 \newline
-In order to remove the NA values and the unreasonable values (bigger or smaller than two days = $\pm 2880$ minutes) for the DepDelay, I simply deleted them from the databse in SQLite (as they would not be of any use later on, also validated that this was OK to do from Chris).
-This is done with the query below and the database is changed when we execute the query on the db with the command $dbGetQuery$.
+In order to remove the NA values and the unreasonable values (bigger or smaller than two days = $\pm 2880$ minutes) for the DepDelay, I simply deleted them from the databse in SQLite (as they would not be of any use later on, also validated that this was OK to do from Chris). This creates the subset we want.
+This is done with the query below and the database table is changed when we execute the query on the db with the command $dbGetQuery$.
 
 
 <<r2a,eval=FALSE,cache=FALSE>>=
@@ -139,7 +140,7 @@ dbGetQuery(db, query)
 
 \textbf{Spark solution:}
 \newline
-In Spark we only changed the NA's to a negative value that is unreasonable when doing the grouping by key. In this way they will not add to the total count when we perform that operation (this was an OK solution as per instructions on OH). See the last three lines in the code chunk below (which is also part of the Spark solution in 2b)):
+In Spark I filtered the dataset and changed the NA's to a negative value that is unreasonable and will not add to the counts of DepDelay greater than or the proportions when doing the grouping by key. In this way they will not add to the total count when we perform that operation (also a confirmed solution). See the last three lines in the function defined in the code chunk below (which is part of the Spark solution in 2b)):
 
 
 <<pyspark2a,eval=FALSE,cache=FALSE,engine="python">>=
@@ -151,7 +152,7 @@ def computeKeyValue(line):
     keyVals = '-'.join([vals[x] for x in [8,1,3,4,16,17]])
     if vals[0] == 'Year':
         return('0', [0,0,0,0,1,1]) #header info
-    # OMIT THE NA DEPDELAYS SO THAT WE DO NOT COUNT THEM WRONG
+    # FILTER THE DATASET, SET NA DEPDELAYS SO THAT WE DO NOT COUNT THEM
     if vals[15] == 'NA': #Change NA's
         vals[15] = '-99999'
     return(keyVals, [int(vals[15])])
@@ -163,15 +164,15 @@ def computeKeyValue(line):
 
 \textbf{RSQLite solution:}
 \newline
-First the DepTime was transformed into an integer only showing the hour of the day with the Update query below (divide by 100 and only extract the integer value, equal to rounding down).
+First the DepTime was transformed into an integer only indicating the hour of the day with the Update query below (divide by 100 and cast the result as an integer only extract the integer value, which in SQLite query language is the same as round down to the int value).
 \newline
 \newline
-After that we specify a function $getStat$ that queries to only extract the number of minutes we want to look at for the DepDelay as its argument. Inside we specify one BIG query that categorizes the data set for the columns of interest, subsets it and extracts the total number of flights with regards to the categories, the number of delayed flights greater than the certain amounts of minutes for that category, and the proportion of flights delayed. We want it to be in descending order (so that the greatest proportions come first), then we do not need to sort the data set later, when we want to extract the top 5 dealyed proportions. Then we can extract the values of interest into R and use system.time to see how much time it takes to carry out the operations. We do this for all categories that have more than 30, 60 and 180 minutes in their DepDelay. See the code below for the implementation and the resulting output can be seen in Figure \ref{fig-times1}
+After that we specify a function $getStat$ that sends a query to only extract the statistics for the number of minutes we want to look at for the DepDelay as its argument. Inside $getStat$ we specify one BIG query that carries out all the operations. It categorizes the data set for the columns of interest, subsets it and extracts the total number of flights with regards to the categories, the number of delayed flights greater than the certain amounts of minutes defined for that category, and the proportion of flights delayed compared to the total number of flights in that category. We want it to be in descending order (so that the greatest proportions/fractions come first), then we do not need to sort the result later when we want to extract the top 5 dealyed proportions. Then we can extract the summary statistics into R and use system.time to see how much time it takes to carry out. We do this for all categories and calculate the proportions that have more than 30, 60 and 180 minutes in their DepDelay. See the code below for the implementation and the resulting output can be seen in Figure \ref{fig-times1}
 
 <<r2b,eval=FALSE,cache=FALSE>>=
 
 #Only shows hour of departure (OK, tested so it rounds down)
-query<-"UPDATE airData SET DepTime = cast(DepTime / 100 as int)"
+query<-"UPDATE airData SET DepTime = CAST(DepTime / 100 AS INT)"
 dbGetQuery(db, query)
 
 #Function for extracting proportions Total number of flights, 
@@ -200,17 +201,17 @@ system.time(stat180<-getStat(180))
 \begin{figure}[H]
 \centering
 \includegraphics[scale=0.6]{times1.jpg}
-\caption{The time it took to categorize and get the proportion for the different values DepDelay greater than 30, 60 and 180 minutes on the EC2 instance}
+\caption{The time it took to extract the summary statistics for the categories for the different values DepDelay greater than 30, 60 and 180 minutes on the EC2 instance}
 \label{fig-times1}
 \end{figure}
 
 \textbf{Spark Solution}
 
 
-For Spark I started an instance with 12 nodes/workers according to the instructions. Then I downloaded and unzipped all the data files as well as installed pyspark according to Chris' solutions. Locally I wrote a .py script that I submitted via Cyberduck (thanks Harold!) and then I ran that on the Spark cluster with \verb;./spark/bin/spark-submit code.py;. The script submitted can be seen below with comments.
+In Spark I started an instance with 12 nodes/workers according to the instructions. Then I downloaded and unzipped all the data files as well as installed pyspark according to Chris' solutions. Locally I wrote a .py script that I submitted via Cyberduck (thanks Harold!) and then I ran that on the Spark cluster with \verb;./spark/bin/spark-submit code.py;. We repartitioned the data so that it could be distributed across the cores. The script submitted (together with comments for what it does) can be seen below with comments.
 \newline
 \newline
-\textbf{N.B.} Here the counts needed for all the number of DepDelays greater than 30, 60 or 180 minutes for each category are computed and added in the correct format. The proportions are never explicitly calculated, since it said in the problem set that we could only collect 'the counts needed to compute the proportions without actually finishing the calculation of computing the proportions'. Also when we read in the data into spark with \verb;lines = sc.textFile('/data/airline'); the DepTime is formatted in a way that I could not transform it into an integer/float value and divide it by 100 (I tried several different implementations, but Spark always aborted and returned an error, even though it worked locally in python). However to get the correct groupings and proportions this is only post processing that can be done by reducing by key again  when we calculate the proportions. Since this was not necessary for this problem set, and we only needed to compute the counts, the solution below should be satisfactory.
+\textbf{N.B.} Here the counts needed for all the number of DepDelays greater than 30, 60 or 180 minutes for each category are computed and added in the correct format. The proportions are never explicitly calculated, since it said in the problem set that we only needed to collect \textit{the counts needed to compute the proportions without actually finishing the calculation of computing the proportions}. Also when we read in the data into spark with \verb;lines = sc.textFile('/data/airline'); the DepTime is of a strange format so I could not use the length of the string and the position of the numbers to determine the hour, and also it was impossible to cast it as a float, divide it by 100, use the integer part and cast that as a character, hence I could not transform it into an integer/float value and divide it by 100 (I tried several different implementations, but Spark always aborted and returned an error, even though it worked locally when doing it on similar DepDelay strings in python). However to extract the correct groupings and proportions, with the correct format of the DepTime, this is only post processing that can be done by reducing by key again when we read in the results from below and calculate proportions. \textbf{The solution computes the counts needed to compute the proportions}, which was the only thing asked for in the PS manual, hence I did not carry out the post-processing operations as explained above.
 
 <<r2bpy,eval=FALSE,cache=FALSE,engine="python">>=
 
@@ -260,8 +261,8 @@ def countTimes(x):
     else:
         return(key,[-987654321,-987654321,-987654321,-987654321]) #return different error
 
-            
-def stringConvert(x): #Convert output to correct string format
+#Function that converts output to correct string format            
+def stringConvert(x): 
     key = x[0]
     countArray = x[1]
     output = str(key)+','+str(countArray[0])+','+str(countArray[1])+','+str(countArray[2])+'
@@ -270,10 +271,10 @@ def stringConvert(x): #Convert output to correct string format
 
     
 #The stuff below was used for comparing to the SQLite results, and the results where equal
-# It was commented out for the solution in 2 c)
+# It was NOT USED for the solution in 2 c)
   allDepDelays = lines.map(computeKeyValue).reduceByKey(add) #Extract all depDelays
   countDelays = allDepDelays.map(countTimes).map(stringConvert).collect() #Count the Delays
-  print countDelays[0:500]
+  print countDelays[0:1000]
 
 
 
@@ -283,21 +284,21 @@ def stringConvert(x): #Convert output to correct string format
 
 \textbf{Result for Spark and Comparison with RSQLite:}
 \newline
-The time it took to carry out the operations above and collecting all the information needed can be seen in Figure \ref{fig-sparktime}. The time was obtained by running the command \verb;time ./spark/bin/spark-submit code.py; in the Spark cluster (it will print out the time to carry out all the operations in the code chunk). The time obtained was for writing the results to a text file, as in Problem 2 c). 
+The time it took to carry out the operations above and collecting all the information needed can be seen in Figure \ref{fig-sparktime}. The time was obtained by running the command \verb;time ./spark/bin/spark-submit code.py; in Spark (it prints the time to carry out all the operations in the code chunk). The time obtained was for writing the results to a text file, as in Problem 2 c). 
 \newline
 \newline
-This is the total time for getting all the data for all the depDelays greater than 30, 60 and 180. This operation, doing it three times in RSQLite on the EC2 instance took about 676+660+663 seconds which is roughly 33 mins. This shows that Spark is faster (16 minutes, roughly half of the time) for gathering the results than RSQLite. (However we could have done the query in RSQLite a bit faster, by extracting all the values at once).
+This is the total time for getting all the data for all the depDelays greater than 30, 60 and 180. This operation, doing it three times in RSQLite on the EC2 instance took about 676+660+663 seconds which is roughly 33 mins (elapsed time). This shows that Spark is faster (16 minutes elapsed time), roughly half of the time for gathering the results than RSQLite. (However we could have done the query in RSQLite a bit faster, by extracting all the summary statistics for 30, 60 and 180 at once).
 
 \begin{figure}[H]
 \centering
 \includegraphics[scale=0.6]{sparktime.png}
-\caption{Time for running the spark script, gathering all the data needed to get all the counts needed}
+\caption{Time for running the Spark script, gathering all the data needed to collect all summary statistics for every category and their counts}
 \label{fig-sparktime}
 \end{figure}
 
 \subsection{2c)}
 
-Below the line is shown for how to save the output as a file. And in Figure \ref{fig-sparkstore} you can see the file size of the total data stored on disk in the Spark master node as well as the first values stored in the output file.
+Below the one line of code is presented for how I saved the output (the resulting aggregated dataset) as a single data file on the master node. And in Figure \ref{fig-sparkstore} you can see the file size of the total data stored on disk in the Spark master node as well as a print out of the first values in the output data file.
 
 <<r2cpy,eval=FALSE,cache=FALSE,engine="python">>=
   
@@ -323,7 +324,9 @@ lines.map(computeKeyValue).reduceByKey(add).map(countTimes).
 
 \subsection{2d)}
 
-Here we add an index to the airData database for all the columns of interest when we group/categorize. We update the database with a $dbGetQuery$ and then we carry out the same operations as in Question 2d). As can be seen the times to make the query are more than twice as fast when we add an index. N.B. After every read in we delete the variable $stat30$, $stat60$ or $stat180$ so that we have enough RAM to make the query for the next minute specification.
+Here we add an index to the airData table in the database for all the columns of interest when we group/categorize. We update the database with a $dbGetQuery$, so that the index is added, and then we carry out the same operations as in Question 2d). As can be seen the times to make the query are more than twice as fast when we add an index. 
+\newline
+\textbf{N.B.} After every read in we delete the variable $stat30$, $stat60$ or $stat180$ so that we have an equal amount of RAM available when make a new query for the next minute specification.
 \newline
 The resulting output can be seen in Figure \ref{fig-times2}
 
@@ -333,27 +336,30 @@ query<-"CREATE INDEX idx ON airData(UniqueCarrier, Origin, Dest, Month, DayOfWee
 dbGetQuery(db, query)
 
 system.time(stat30<-getStat(30))
+rm(stat30)
 system.time(stat60<-getStat(60))
+rm(stat60)
 system.time(stat180<-getStat(180))
+rm(stat180)
 
 @
 \noindent
 \newline
 
-In total this took 277+321+318, which is about 15 minutes. This is equivalent to the speed it took to carry out the operations in Spark for problem 2 b), but then we do not take into account the time it took to add an index to the database.
+In total this took 277+321+318, which is about 15 minutes. This is equivalent to the speed it took to carry out the operations in Spark for problem 2 b) (but then we do not take into account the actual time it took to add an index to the database table).
 
 
 \begin{figure}[H]
 \centering
 \includegraphics[scale=0.6]{times2.jpg}
-\caption{The time it took to categorize and get the proportion for the different values DepDelay greater than 30, 60 and 180 minutes WITH an index added to the databaseon the EC2 instance}
+\caption{The time it took to categorize and get the proportion for the different values of DepDelay greater than 30, 60 and 180 minutes WITH an index added to the database table grouping columns, done on the EC2 instance}
 \label{fig-times2}
 \end{figure}
 
 
 \subsection{2e)}
 
-I used the results from SQLite to print out the top 5 groupings for DelayDep greater than 30, 60 and 180 with at least 150 flights in total from the output in the EC2 instance. In order to do this we need to first find all the indicies for the total number of flights greater or equal to 150 for every group. Since the results in the $stat$ variables are ordered so that the highest proportion of late flights will be at the top of the variable (it is ordered by DelayedProp in descending order). The results can be seen below in Figure \ref{fig-top5}.
+I used the results from SQLite on the EC2 instance to print out the top 5 groupings for DelayDep greater than 30, 60 and 180 with at least 150 flights in total for that category. In order to do this we need to first find all the indicies for groupings/categories where the total number of flights is greater or equal to 150 for every group (since it is an integer value we can take >149). The results in the different $stat$ variables are already ordered (done in the query) so that the highest proportion of late flights will be at the top of the results (it is ordered by DelayedProp in descending order). Therefore we only need to print the first five values of the index vectors formed for total flights greater or equal to 150. The implementation can be seen in the code chunk below and the results are presented in Figure \ref{fig-top5}. As can be seen the carrier WN that have many flights on the route from (or to) HOU to (or from) DAL seems to have had the most problems with delayed flights in all DepDelay minute categories.
 
 <<r2e,eval=FALSE,cache=FALSE>>=
 
@@ -381,13 +387,13 @@ stat180[idx180[1:5],]
 
 \section{Problem 3}
 
-For problem 3 we used parallelization in order to speed up the queries even more. A sequence of subquery was established for the DepTime (sequence of values from 0 to 24, hence 25 subqueries in total). Also for the function being called a new connection to the database was opened every time a new task was initialized. Find the implemented solution below and the results after the code chunk.
+For problem 3 we used parallelization on the m3.xlarge EC2 instance (4 cores) in order to speed up the queries even more. A sequence of subqueries was done for the DepTime. The unique values was obtained by a query verb;depT<-dbGetQuery(db,"SELECT DISTINCT DepTime FROM airData"); which gave sequence of values from midnight (00:01, presented as 1, is just 0) to midnight (24:00, presented as 2400, is 24), hence 25 subqueries in total. Below only defined as \verb;depT=seq(0,24);. Also a new function $taskFun$ was built based on the $getStat$ function that is being called in foreach and mclapply. $taskFun$ opens a new connection to the database every time a new task was initialized and takes DepTime and minutes as input arguments. Find the implemented solution below and the results after the code chunk.
 \newline
 \newline
-\textbf{N.B.} A lot of experimentation was done with this, and what I figured was that in order to obtain the speed increase one had to drop the old index, and add a new one for the columns of interest, however indexing on the columns where the subqueries get made FIRST.
+\textbf{N.B.} A lot of experimentation was done with this, and what I figured was that in order to obtain the speed increase one had to drop the old index, and add a new one for the columns of interest, however indexing on the columns where the subqueries get made FIRST. Hence we create an index on the database table where we index on DepTime first and then the other columns for the groupings/categories.
 \newline
 \newline
-\textbf{N.B.2} Parallelization on the database was kind of buggy, some times when I ran it (like indexing and doing sub-queries on the month it actually took a lot longer to run and sometimes it was faster). I also tried modifying the $taskFun$ function with the follwoing lines, first I removed the database connection with rm(db) in R, however it was not quicker with dbSendQuery, and clearing the db and the results compared to not doing it:
+\textbf{N.B.2} Parallelization on the database was kind of buggy, some times when I ran it (like indexing and doing sub-queries on the month it actually took a lot longer to run and sometimes it was faster). I also tried modifying the $taskFun$ function with the lines below, so that I first removed the database connection with rm(db) in R, and established a new one for every task, however it was not quicker with this procedure and dbSendQuery compared to not doing it:
 
 \begin{verbatim}
     [...]
@@ -406,7 +412,7 @@ library(doParallel)
 library(foreach)
 library(iterators)
 
-## We have dropped the old index and instead index on DepTime first so that the parallelization
+## The old index from 2d) is dropped, add index on DepTime first so that the parallelization
 # really speeds up the process
 query<-"CREATE INDEX idx ON airData(DepTime, Origin, Dest, Month, DayOfWeek, UniqueCarrier)"
 dbGetQuery(db, query)
@@ -435,19 +441,24 @@ registerDoParallel(nCores) #For foreach
 
 ##mclapply solution
 system.time(res<-mclapply(depT, taskFun, mc.cores = nCores,minute=30))
+rm(res)
 system.time(res<-mclapply(depT, taskFun, mc.cores = nCores,minute=60))
+rm(res)
 system.time(res<-mclapply(depT, taskFun, mc.cores = nCores,minute=180))
+rm(res)
 
 #foreach solution
 mins=c(30,60,180) # run for all three, will print out system.time
 for (j in 1:length(mins)) {
   print(mins[j])
   print(system.time(out <- foreach(i = 1:length(depT)) %dopar% {
-    cat('Starting ', i, 'th job.\n', sep = '')
+    cat('Starting ', i, 'th job.\n', sep = '') #print job status
     outSub <- taskFun(depT[i],minute=mins[j])
-    cat('Finishing ', i, 'th job.\n', sep = '')
+    cat('Finishing ', i, 'th job.\n', sep = '') #print job status
     outSub # part of the out object
+
   }))
+  rm(out) #to clear up RAM
 }
 
 
@@ -455,7 +466,7 @@ for (j in 1:length(mins)) {
 \noindent
 \newline
 
-As can be seen below from the resulting output picture the parallelization solution for DepDelay greater than 30 minutes was about 50 seconds faster than the indexed solution in 2d), which is about 20 perecent faster in comparison to doing the full query. foreach gave the same result. This also worked on my local machine with four cores, giving a slightly greater speed up (about 40 percent).
+As can be seen below from the resulting output picture the parallelization solution for DepDelay greater than 30 minutes was about 50 seconds faster than the indexed solution in 2d), which is about 20 perecent faster in comparison to doing the full query. foreach gave the same result. This was kind of buggy on the m3.xlarge EC2 instance (sometimes the elapsed time was much greater), but it worked everytime on my local machine with four cores, giving a slightly greater speed up (about 40 percent).
 
 \begin{figure}[H]
 \centering
@@ -466,7 +477,7 @@ As can be seen below from the resulting output picture the parallelization solut
 
 \section{Problem 4}
 
-In order to cut out the columns not needed R was first used to extract the columns of interest and their indicies with the code below:
+In order to cut out the columns not needed R was first used to extract the indicied of the columns needed and to print them to a file $index.txt$ that could be accessed in bash (A Piazza note later said that we could hard code the column indicies, but I kept my solution). Could also have extracted this info in bash, but the R solution is more elegant:
 
 
 <<rprob4,eval=FALSE,cache=FALSE>>=
@@ -491,11 +502,11 @@ cat(index,sep=",",file="index.txt") # save indices to a text file.
 \noindent
 \newline
 
-Once we had the column indicies we could run the following bash script in Unix in order to pipe out the output into new bz2-files, and also getting the time for each year.
+Once we had the column indicies we could run the following bash script as a for loop for all the .bz2 zipped year files on the EC2 m3.xlarge instance and pipe out the cut columns (with an added ',' delimiter between the data entries) into new zipped bz2-files (without unzipping). The code below prints the time the operation took for each year. The year is printed with $echo$ to show progress:
 
 <<bashprob4,eval=FALSE,cache=FALSE,engine="bash">>=
 
-for yr in {1994..1996}
+for yr in {1987..2008}
 do
 time (bunzip2 -c ${yr}.csv.bz2 | cut -d, -f$(cat index.txt) | bzip2 > ${yr}clean.csv.bz2)
 echo $yr
@@ -506,13 +517,13 @@ done
 \noindent
 \newline
 
-When this code was run on a m3.xlarge instance it took 722 seconds to pre-process all the bz2-files (about 12 minutes). They take up about 1/4 of storage compared to the original zipped files. I would definitely make this pre-processing if I worked with a large data set.
+When this code was run on a m3.xlarge instance it took 722 seconds to pre-process all the bz2-files (about 12 minutes real/elapsed time). They take up about 1/4 of storage compared to the original zipped bz2 files. This pre-processing step would also speed up all the operations above, since we would only need to work with a subset of the data set in our database. I would definitely make this pre-processing if I worked with a large data set.
 
 You can see the time result in figure \ref{fig-bashtime} below:
 
 \begin{figure}[H]
 \centering
-\includegraphics[scale=0.4]{prob4.jpg}
+\includegraphics[scale=0.37]{prob4.jpg}
 \caption{Timing of pre-processing and only cutting out columns we want to work with in bash (Includes three columns of output in the same picture)}
 \label{fig-bashtime}
 \end{figure}
