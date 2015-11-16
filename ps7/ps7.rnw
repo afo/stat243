@@ -48,7 +48,7 @@ opts_chunk$set(fig.width = 5, fig.height = 5)
 # if we wanted chunks by default not to be evaluated
 # opts_chunk$set(eval = FALSE) 
 set.seed(0)
-setwd("~/src/ps7")
+setwd("~/src/stat243/ps7")
 library(stringr)
 library(curl)
 library(methods)
